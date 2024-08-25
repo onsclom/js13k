@@ -1,4 +1,4 @@
-import { gameArea } from "./constants";
+import { gameArea, colors } from "./constants";
 import { randomBetween, randomChoice } from "./utils";
 
 export function createEnemy() {
@@ -78,21 +78,37 @@ export function drawEnemy(
   ctx: CanvasRenderingContext2D,
   enemy: ReturnType<typeof createEnemy>,
 ) {
-  if (enemy.timeToSpawn > 0) {
-    ctx.globalAlpha = 0.3;
-    // TODO: maybe progress bar spawn?
-  }
+  // if (enemy.timeToSpawn > 0) {
+  //   ctx.globalAlpha = 0.3;
+  //   // TODO: maybe progress bar spawn?
+  // }
 
-  ctx.fillStyle = enemy.dead ? "gray" : "red";
+  ctx.fillStyle = colors[1];
   ctx.beginPath();
   ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "white";
+  ctx.fillStyle = colors[0];
   ctx.font =
     "3px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(enemy.text, enemy.x, enemy.y);
+
+  if (enemy.dead) {
+    // apply a black tint over the enemy
+    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (enemy.timeToSpawn >= 0) {
+    // draw white tint
+    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // TODO: progress bar hype
+  }
 
   ctx.globalAlpha = 1;
 }

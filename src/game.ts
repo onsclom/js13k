@@ -1,10 +1,17 @@
-import { gameArea } from "./constants";
+import { gameArea, colors } from "./constants";
 import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
 import { closestIntersectionPoint } from "./utils";
 
+// CONSTANTS
 const playerRadius = 2;
 const enemySpawnRate = 1000;
 const rayLength = 200;
+const speed = 20;
+const leftKeys = ["ArrowLeft", "a"];
+const rightKeys = ["ArrowRight", "d"];
+const upKeys = ["ArrowUp", "w"];
+const downKeys = ["ArrowDown", "s"];
+
 let state = {
   player: {
     x: gameArea.width / 2,
@@ -26,44 +33,182 @@ document.onmousemove = (e) => {
   state.cursor.y = ((screenCoords.y - y) / height) * gameArea.height;
 };
 
-const speed = 20;
-const leftKeys = ["ArrowLeft", "a"];
-const rightKeys = ["ArrowRight", "d"];
-const upKeys = ["ArrowUp", "w"];
-const downKeys = ["ArrowDown", "s"];
 export function update(dt: number) {
   if (state.player.dead) return;
+  handlePlayerMovement(dt);
+  handleSpawningEnemies(dt);
+  if (state.cursor.clicked) handleShoot();
+  updateEnemies(dt);
+  state.cursor.clicked = false;
+}
 
-  if (leftKeys.some((key) => keysDown.has(key))) {
-    state.player.x -= (dt / 1000) * speed;
+const shadowOffset = 0.5;
+
+export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+  const drawingRect = canvas.getBoundingClientRect();
+  const { xScale, yScale } = gameAreaInScreenSpace(canvas);
+
+  drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
+
+  function drawEnemyShadows(ctx: CanvasRenderingContext2D) {
+    state.enemies
+      .filter((enemy) => !enemy.dead && enemy.timeToSpawn <= 0)
+      .forEach((enemy) => {
+        ctx.fillStyle = colors[0];
+        ctx.beginPath();
+        ctx.arc(
+          enemy.x + shadowOffset,
+          enemy.y + shadowOffset,
+          enemy.radius,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        ctx.fillStyle = colors[0];
+      });
   }
-  if (rightKeys.some((key) => keysDown.has(key))) {
-    state.player.x += (dt / 1000) * speed;
+  function drawPlayerShadow(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = colors[0];
+    ctx.beginPath();
+    ctx.arc(
+      state.player.x + shadowOffset,
+      state.player.y + shadowOffset,
+      state.player.radius,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
   }
-  if (upKeys.some((key) => keysDown.has(key))) {
-    state.player.y -= (dt / 1000) * speed;
-  }
-  if (downKeys.some((key) => keysDown.has(key))) {
-    state.player.y += (dt / 1000) * speed;
-  }
-  state.player.x = Math.max(
-    playerRadius,
-    Math.min(gameArea.width - playerRadius, state.player.x),
+  drawPlayerShadow(ctx);
+  drawEnemyShadows(ctx);
+  drawEnemies(ctx);
+  drawPlayer(ctx);
+  if (state.player.dead) drawGameOverScreen(ctx);
+}
+
+function drawGameOverScreen(ctx: CanvasRenderingContext2D) {
+  ctx.globalAlpha = 0.5;
+  // TODO: think more about this
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
+  ctx.globalAlpha = 1;
+
+  // YOU DIED
+  ctx.fillStyle = colors[2];
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font =
+    "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+  ctx.fillText("YOU LOSE", gameArea.width / 2, gameArea.height / 2);
+}
+
+function drawPlayer(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = colors[2];
+  ctx.beginPath();
+  ctx.roundRect(
+    state.player.x - state.player.radius,
+    state.player.y - state.player.radius,
+    state.player.radius * 2,
+    state.player.radius * 2,
+    state.player.radius,
   );
-  state.player.y = Math.max(
-    playerRadius,
-    Math.min(gameArea.height - playerRadius, state.player.y),
+  ctx.fill();
+}
+function drawLaser(ctx: CanvasRenderingContext2D) {
+  const angle = Math.atan2(
+    state.cursor.y - state.player.y,
+    state.cursor.x - state.player.x,
   );
-  state.spawnTimer += dt;
-  while (state.spawnTimer >= enemySpawnRate) {
-    state.enemies.push(createEnemy());
-    state.spawnTimer -= enemySpawnRate;
+  const intersections = state.enemies
+    .filter((enemy) => !enemy.dead && enemy.timeToSpawn <= 0)
+    .map((enemy) =>
+      closestIntersectionPoint(
+        { x: state.player.x, y: state.player.y },
+        {
+          x: state.player.x + Math.cos(angle) * rayLength,
+          y: state.player.y + Math.sin(angle) * rayLength,
+        },
+        { x: enemy.x, y: enemy.y },
+        enemy.radius,
+      ),
+    )
+    .filter((x) => x !== null);
+  const intersection = intersections.reduce(
+    (acc, cur) => {
+      if (acc === null) return cur;
+      if (cur === null) return acc;
+      const distAcc = Math.hypot(
+        acc.x - state.player.x,
+        acc.y - state.player.y,
+      );
+      const distCur = Math.hypot(
+        cur.x - state.player.x,
+        cur.y - state.player.y,
+      );
+      return distCur < distAcc ? cur : acc;
+    },
+    null as null | { x: number; y: number },
+  );
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = "red";
+  ctx.beginPath();
+  ctx.moveTo(state.player.x, state.player.y);
+  if (intersection) {
+    ctx.lineTo(intersection.x, intersection.y);
+  } else {
+    ctx.lineTo(
+      state.player.x + Math.cos(angle) * rayLength,
+      state.player.y + Math.sin(angle) * rayLength,
+    );
   }
+  ctx.globalAlpha = 0.5;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
 
-  if (state.cursor.clicked) {
-    handleShoot();
-  }
+function drawEnemies(ctx: CanvasRenderingContext2D) {
+  state.enemies
+    .filter((enemy) => enemy.dead)
+    .forEach((enemy) => {
+      drawEnemy(ctx, enemy);
+    });
+  state.enemies
+    .filter((enemy) => !enemy.dead && enemy.timeToSpawn >= 0)
+    .forEach((enemy) => {
+      drawEnemy(ctx, enemy);
+    });
+  state.enemies
+    .filter((enemy) => !enemy.dead && enemy.timeToSpawn < 0)
+    .forEach((enemy) => {
+      drawEnemy(ctx, enemy);
+    });
+}
+function drawLetterBoxing(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  drawingRect: {
+    width: number;
+    height: number;
+  },
+  xScale: number,
+  yScale: number,
+) {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(
+    (drawingRect.width - gameArea.width * xScale) / 2,
+    (drawingRect.height - gameArea.height * yScale) / 2,
+  );
+  ctx.scale(xScale, yScale);
+  ctx.beginPath();
+  ctx.rect(0, 0, gameArea.width, gameArea.height);
+  ctx.clip();
+  ctx.fillStyle = colors[3];
+  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
+}
 
+function updateEnemies(dt: number) {
   state.enemies.forEach((enemy) => {
     updateEnemy(enemy, dt);
     if (enemy.dead || enemy.timeToSpawn > 0) return;
@@ -97,7 +242,37 @@ export function update(dt: number) {
       }
     });
   });
-  state.cursor.clicked = false;
+}
+
+function handleSpawningEnemies(dt: number) {
+  state.spawnTimer += dt;
+  while (state.spawnTimer >= enemySpawnRate) {
+    state.enemies.push(createEnemy());
+    state.spawnTimer -= enemySpawnRate;
+  }
+}
+
+function handlePlayerMovement(dt: number) {
+  if (leftKeys.some((key) => keysDown.has(key))) {
+    state.player.x -= (dt / 1000) * speed;
+  }
+  if (rightKeys.some((key) => keysDown.has(key))) {
+    state.player.x += (dt / 1000) * speed;
+  }
+  if (upKeys.some((key) => keysDown.has(key))) {
+    state.player.y -= (dt / 1000) * speed;
+  }
+  if (downKeys.some((key) => keysDown.has(key))) {
+    state.player.y += (dt / 1000) * speed;
+  }
+  state.player.x = Math.max(
+    playerRadius,
+    Math.min(gameArea.width - playerRadius, state.player.x),
+  );
+  state.player.y = Math.max(
+    playerRadius,
+    Math.min(gameArea.height - playerRadius, state.player.y),
+  );
 }
 
 function handleShoot() {
@@ -151,125 +326,6 @@ function getEnemyHovered() {
   });
 
   return closestIntersection?.enemy;
-}
-
-export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  const drawingRect = canvas.getBoundingClientRect();
-  const { xScale, yScale } = gameAreaInScreenSpace(canvas);
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.translate(
-    (drawingRect.width - gameArea.width * xScale) / 2,
-    (drawingRect.height - gameArea.height * yScale) / 2,
-  );
-  ctx.scale(xScale, yScale);
-
-  ctx.beginPath();
-  ctx.rect(0, 0, gameArea.width, gameArea.height);
-  ctx.clip();
-
-  ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
-
-  state.enemies
-    .filter((enemy) => enemy.dead)
-    .forEach((enemy) => {
-      drawEnemy(ctx, enemy);
-    });
-  state.enemies
-    .filter((enemy) => !enemy.dead)
-    .forEach((enemy) => {
-      drawEnemy(ctx, enemy);
-    });
-
-  const angle = Math.atan2(
-    state.cursor.y - state.player.y,
-    state.cursor.x - state.player.x,
-  );
-
-  const intersections = state.enemies
-    .filter((enemy) => !enemy.dead && enemy.timeToSpawn <= 0)
-    .map((enemy) =>
-      closestIntersectionPoint(
-        { x: state.player.x, y: state.player.y },
-        {
-          x: state.player.x + Math.cos(angle) * rayLength,
-          y: state.player.y + Math.sin(angle) * rayLength,
-        },
-        { x: enemy.x, y: enemy.y },
-        enemy.radius,
-      ),
-    )
-    .filter((x) => x !== null);
-
-  const intersection = intersections.reduce(
-    (acc, cur) => {
-      if (acc === null) return cur;
-      if (cur === null) return acc;
-      const distAcc = Math.hypot(
-        acc.x - state.player.x,
-        acc.y - state.player.y,
-      );
-      const distCur = Math.hypot(
-        cur.x - state.player.x,
-        cur.y - state.player.y,
-      );
-      return distCur < distAcc ? cur : acc;
-    },
-    null as null | { x: number; y: number },
-  );
-
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = "red";
-  ctx.beginPath();
-  ctx.moveTo(state.player.x, state.player.y);
-  if (intersection) {
-    ctx.lineTo(intersection.x, intersection.y);
-  } else {
-    ctx.lineTo(
-      state.player.x + Math.cos(angle) * rayLength,
-      state.player.y + Math.sin(angle) * rayLength,
-    );
-  }
-  ctx.globalAlpha = 0.5;
-  ctx.lineCap = "round";
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-
-  ctx.fillStyle = "blue";
-  ctx.beginPath();
-  ctx.roundRect(
-    state.player.x - state.player.radius,
-    state.player.y - state.player.radius,
-    state.player.radius * 2,
-    state.player.radius * 2,
-    state.player.radius,
-  );
-  ctx.fill();
-
-  const enemy = getEnemyHovered();
-  if (enemy) {
-    ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
-    ctx.beginPath();
-    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (state.player.dead) {
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, gameArea.width, gameArea.height);
-    ctx.globalAlpha = 1;
-
-    // YOU DIED
-    ctx.fillStyle = "red";
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font =
-      "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-    ctx.fillText("YOU LOSE", gameArea.width / 2, gameArea.height / 2);
-  }
 }
 
 function gameAreaInScreenSpace(canvas: HTMLCanvasElement) {
