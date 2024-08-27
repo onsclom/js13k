@@ -78,10 +78,32 @@ export function drawEnemy(
   ctx: CanvasRenderingContext2D,
   enemy: ReturnType<typeof createEnemy>,
 ) {
-  // if (enemy.timeToSpawn > 0) {
-  //   ctx.globalAlpha = 0.3;
-  //   // TODO: maybe progress bar spawn?
-  // }
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.beginPath();
+  ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = colors[1];
+  ctx.beginPath();
+  ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = colors[0];
+  ctx.font =
+    "3px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(enemy.text, enemy.x, enemy.y);
+  ctx.restore();
+
+  ctx.save();
+  const progress = Math.min(1, 1 - enemy.timeToSpawn / 3000);
+  ctx.beginPath();
+  ctx.moveTo(enemy.x, enemy.y); // Move to the center of the arc
+  ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2 * progress);
+  ctx.closePath(); // Close the path to create a pie-like segment
+  ctx.clip();
 
   ctx.fillStyle = colors[1];
   ctx.beginPath();
@@ -100,15 +122,6 @@ export function drawEnemy(
     ctx.beginPath();
     ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
     ctx.fill();
-  } else if (enemy.timeToSpawn >= 0) {
-    // draw white tint
-    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-    ctx.beginPath();
-    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // TODO: progress bar hype
   }
-
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
