@@ -1,4 +1,5 @@
 import { update, draw } from "./game";
+import { resetClicked } from "./input";
 
 const canvas = document.createElement("canvas");
 document.body.appendChild(canvas);
@@ -20,6 +21,6 @@ let lastTime = performance.now();
     update(deltaTime);
   }
   draw(ctx, canvas);
-
   requestAnimationFrame(animationFrame);
+  resetClicked();
 })();

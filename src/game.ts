@@ -1,6 +1,8 @@
 import { drawBullet, updateBullet, Bullet, drawBulletShadow } from "./bullet";
 import { gameArea, colors, shadowOffset } from "./constants";
 import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
+import { gameAreaInScreenSpace } from "./utils";
+import { keysDown, cursor } from "./input";
 
 // CONSTANTS
 const playerRadius = 2;
@@ -19,30 +21,57 @@ let state = {
     dead: false,
   },
   bullets: [] as Bullet[],
-  cursor: { x: 0, y: 0, clicked: false },
   enemies: [] as ReturnType<typeof createEnemy>[],
   deadEnemies: [] as ReturnType<typeof createEnemy>[],
   spawnTimer: 0,
-};
-
-document.onmousemove = (e) => {
-  const screenCoords = { x: e.clientX, y: e.clientY };
-  const { x, y, width, height } = gameAreaInScreenSpace(
-    document.querySelector("canvas") as HTMLCanvasElement,
-  );
-  state.cursor.x = ((screenCoords.x - x) / width) * gameArea.width;
-  state.cursor.y = ((screenCoords.y - y) / height) * gameArea.height;
 };
 
 export function update(dt: number) {
   if (state.player.dead) return;
   handlePlayerMovement(dt);
   handleSpawningEnemies(dt);
-  if (state.cursor.clicked) handleShoot();
+  if (cursor.clicked) handleShoot();
   updateEnemies(dt);
-  updateBullets(dt);
+  state.bullets.forEach((bullet) => updateBullet(bullet, dt));
+  constrainBulletAmount();
+  handleBulletsTouchingEnemies();
+  handlePlayerTouchingEnemies();
+}
+export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+  const drawingRect = canvas.getBoundingClientRect();
+  const { xScale, yScale } = gameAreaInScreenSpace(canvas);
+  drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
+  drawDeadEnemies(ctx);
+  drawPlayerShadow(ctx);
+  drawEnemyShadows(ctx);
+  state.bullets.forEach((bullet) => drawBulletShadow(ctx, bullet));
+  drawEnemies(ctx);
+  drawPlayer(ctx);
+  state.bullets.forEach((bullet) => drawBullet(ctx, bullet));
+  if (state.player.dead) drawGameOverScreen(ctx);
+}
 
-  // handle bullets touching enemies
+function handlePlayerTouchingEnemies() {
+  for (let i = state.enemies.length - 1; i >= 0; i--) {
+    const enemy = state.enemies[i];
+    if (enemy.timeToSpawn >= 0) continue;
+    const dist = Math.sqrt(
+      (enemy.x - state.player.x) ** 2 + (enemy.y - state.player.y) ** 2,
+    );
+    if (dist < playerRadius + enemy.radius) {
+      if (enemy.number !== 13) {
+        state.deadEnemies.push(enemy);
+        const dead = state.enemies.splice(i, 1);
+        state.deadEnemies.push(dead[0]);
+      } else {
+        console.log("lost");
+        state.player.dead = true;
+      }
+    }
+  }
+}
+
+function handleBulletsTouchingEnemies() {
   state.bullets.forEach((bullet) => {
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       const enemy = state.enemies[i];
@@ -61,43 +90,6 @@ export function update(dt: number) {
       }
     }
   });
-
-  // handle player touching enemies
-  for (let i = state.enemies.length - 1; i >= 0; i--) {
-    const enemy = state.enemies[i];
-    if (enemy.timeToSpawn >= 0) continue;
-    const dist = Math.sqrt(
-      (enemy.x - state.player.x) ** 2 + (enemy.y - state.player.y) ** 2,
-    );
-    if (dist < playerRadius + enemy.radius) {
-      if (enemy.number !== 13) {
-        state.deadEnemies.push(enemy);
-        const dead = state.enemies.splice(i, 1);
-        state.deadEnemies.push(dead[0]);
-      } else {
-        console.log("lost");
-        state.player.dead = true;
-      }
-    }
-  }
-
-  // reset clicked
-  state.cursor.clicked = false;
-}
-
-export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  const drawingRect = canvas.getBoundingClientRect();
-  const { xScale, yScale } = gameAreaInScreenSpace(canvas);
-
-  drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
-  drawDeadEnemies(ctx);
-  drawPlayerShadow(ctx);
-  drawEnemyShadows(ctx);
-  state.bullets.forEach((bullet) => drawBulletShadow(ctx, bullet));
-  drawEnemies(ctx);
-  drawPlayer(ctx);
-  drawBullets(ctx);
-  if (state.player.dead) drawGameOverScreen(ctx);
 }
 
 function drawDeadEnemies(ctx: CanvasRenderingContext2D) {
@@ -108,10 +100,6 @@ function drawDeadEnemies(ctx: CanvasRenderingContext2D) {
     ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
     ctx.fill();
   });
-}
-
-function drawBullets(ctx: CanvasRenderingContext2D) {
-  state.bullets.forEach((bullet) => drawBullet(ctx, bullet));
 }
 
 function drawEnemyShadows(ctx: CanvasRenderingContext2D) {
@@ -143,11 +131,6 @@ function drawPlayerShadow(ctx: CanvasRenderingContext2D) {
     Math.PI * 2,
   );
   ctx.fill();
-}
-
-function updateBullets(dt: number) {
-  state.bullets.forEach((bullet) => updateBullet(bullet, dt));
-  constrainBulletAmount();
 }
 
 function constrainBulletAmount() {
@@ -239,8 +222,7 @@ function updateEnemies(dt: number) {
 
     // collide with other enemies
     state.enemies.forEach((otherEnemy) => {
-      if (enemy === otherEnemy || otherEnemy.dead || otherEnemy.timeToSpawn > 0)
-        return;
+      if (enemy === otherEnemy || otherEnemy.timeToSpawn > 0) return;
       const dist = Math.sqrt(
         (enemy.x - otherEnemy.x) ** 2 + (enemy.y - otherEnemy.y) ** 2,
       );
@@ -289,8 +271,8 @@ function handlePlayerMovement(dt: number) {
 
 function handleShoot() {
   const angle = Math.atan2(
-    state.cursor.y - state.player.y,
-    state.cursor.x - state.player.x,
+    cursor.y - state.player.y,
+    cursor.x - state.player.x,
   );
   state.bullets.push({
     x: state.player.x,
@@ -301,30 +283,3 @@ function handleShoot() {
     dead: false,
   });
 }
-
-function gameAreaInScreenSpace(canvas: HTMLCanvasElement) {
-  const drawingRect = canvas.getBoundingClientRect();
-  const aspectRatio = gameArea.width / gameArea.height;
-  const windowAspectRatio = drawingRect.width / drawingRect.height;
-  const xScale =
-    windowAspectRatio > aspectRatio
-      ? drawingRect.height / gameArea.height
-      : drawingRect.width / gameArea.width;
-  const yScale =
-    windowAspectRatio > aspectRatio
-      ? drawingRect.height / gameArea.height
-      : drawingRect.width / gameArea.width;
-  return {
-    x: (drawingRect.width - gameArea.width * xScale) / 2,
-    y: (drawingRect.height - gameArea.height * yScale) / 2,
-    width: gameArea.width * xScale,
-    height: gameArea.height * yScale,
-    xScale,
-    yScale,
-  };
-}
-
-const keysDown = new Set<string>();
-document.onkeydown = (e) => keysDown.add(e.key);
-document.onkeyup = (e) => keysDown.delete(e.key);
-document.onpointerdown = () => (state.cursor.clicked = true);
