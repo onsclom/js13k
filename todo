@@ -1,0 +1,24 @@
+main mechanics:
+  - kill 13s by shooting
+  - kill others by touching
+  - if killing something wrong way, you die
+
+enemies:
+  - multiplication/division
+  - sqrt, exponents
+  - area, perimeter?
+
+juice:
+  - particle effects!!
+  - follow miziziz advice to make things look better
+  - particle effects
+  - screen shake
+  - sounds everywhere (use built in js audio stuff)
+  - fun death effect
+
+gameplay:
+  - interactive tutorial
+  - 3 levels
+  - win screen
+  - transitions between "scenes"
+  - death screen

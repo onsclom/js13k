@@ -1,11 +1,10 @@
-import { gameArea, colors } from "./constants";
+import { drawBullet, updateBullet, Bullet, drawBulletShadow } from "./bullet";
+import { gameArea, colors, shadowOffset } from "./constants";
 import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
-import { closestIntersectionPoint } from "./utils";
 
 // CONSTANTS
 const playerRadius = 2;
 const enemySpawnRate = 1000;
-const rayLength = 200;
 const speed = 20;
 const leftKeys = ["ArrowLeft", "a"];
 const rightKeys = ["ArrowRight", "d"];
@@ -19,8 +18,10 @@ let state = {
     radius: playerRadius,
     dead: false,
   },
+  bullets: [] as Bullet[],
   cursor: { x: 0, y: 0, clicked: false },
   enemies: [] as ReturnType<typeof createEnemy>[],
+  deadEnemies: [] as ReturnType<typeof createEnemy>[],
   spawnTimer: 0,
 };
 
@@ -39,51 +40,130 @@ export function update(dt: number) {
   handleSpawningEnemies(dt);
   if (state.cursor.clicked) handleShoot();
   updateEnemies(dt);
+  updateBullets(dt);
+
+  // handle bullets touching enemies
+  state.bullets.forEach((bullet) => {
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      const enemy = state.enemies[i];
+      if (enemy.timeToSpawn >= 0) continue;
+      const dx = enemy.x - bullet.x;
+      const dy = enemy.y - bullet.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < enemy.radius) {
+        if (enemy.number !== 13) {
+          state.player.dead = true;
+        } else {
+          bullet.dead = true;
+          const dead = state.enemies.splice(i, 1);
+          state.deadEnemies.push(dead[0]);
+        }
+      }
+    }
+  });
+
+  // handle player touching enemies
+  for (let i = state.enemies.length - 1; i >= 0; i--) {
+    const enemy = state.enemies[i];
+    if (enemy.timeToSpawn >= 0) continue;
+    const dist = Math.sqrt(
+      (enemy.x - state.player.x) ** 2 + (enemy.y - state.player.y) ** 2,
+    );
+    if (dist < playerRadius + enemy.radius) {
+      if (enemy.number !== 13) {
+        state.deadEnemies.push(enemy);
+        const dead = state.enemies.splice(i, 1);
+        state.deadEnemies.push(dead[0]);
+      } else {
+        console.log("lost");
+        state.player.dead = true;
+      }
+    }
+  }
+
+  // reset clicked
   state.cursor.clicked = false;
 }
-
-const shadowOffset = 0.5;
 
 export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const drawingRect = canvas.getBoundingClientRect();
   const { xScale, yScale } = gameAreaInScreenSpace(canvas);
 
   drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
-
-  function drawEnemyShadows(ctx: CanvasRenderingContext2D) {
-    state.enemies
-      .filter((enemy) => !enemy.dead && enemy.timeToSpawn <= 0)
-      .forEach((enemy) => {
-        ctx.fillStyle = colors[0];
-        ctx.beginPath();
-        ctx.arc(
-          enemy.x + shadowOffset,
-          enemy.y + shadowOffset,
-          enemy.radius,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.fillStyle = colors[0];
-      });
-  }
-  function drawPlayerShadow(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = colors[0];
-    ctx.beginPath();
-    ctx.arc(
-      state.player.x + shadowOffset,
-      state.player.y + shadowOffset,
-      state.player.radius,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-  }
+  drawDeadEnemies(ctx);
   drawPlayerShadow(ctx);
   drawEnemyShadows(ctx);
+  state.bullets.forEach((bullet) => drawBulletShadow(ctx, bullet));
   drawEnemies(ctx);
   drawPlayer(ctx);
+  drawBullets(ctx);
   if (state.player.dead) drawGameOverScreen(ctx);
+}
+
+function drawDeadEnemies(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = "gray";
+  state.deadEnemies.forEach((enemy) => {
+    ctx.fillStyle = colors[enemy.number];
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawBullets(ctx: CanvasRenderingContext2D) {
+  state.bullets.forEach((bullet) => drawBullet(ctx, bullet));
+}
+
+function drawEnemyShadows(ctx: CanvasRenderingContext2D) {
+  state.enemies
+    .filter((enemy) => enemy.timeToSpawn <= 0)
+    .forEach((enemy) => {
+      ctx.fillStyle = colors[0];
+      ctx.beginPath();
+      ctx.arc(
+        enemy.x + shadowOffset,
+        enemy.y + shadowOffset,
+        enemy.radius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = colors[0];
+    });
+}
+
+function drawPlayerShadow(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = colors[0];
+  ctx.beginPath();
+  ctx.arc(
+    state.player.x + shadowOffset,
+    state.player.y + shadowOffset,
+    state.player.radius,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+}
+
+function updateBullets(dt: number) {
+  state.bullets.forEach((bullet) => updateBullet(bullet, dt));
+  constrainBulletAmount();
+}
+
+function constrainBulletAmount() {
+  const maxBullets = 20;
+  let bulletsSeen = 0;
+  for (let i = state.bullets.length - 1; i >= 0; i--) {
+    if (state.bullets[i].dead) state.bullets.splice(i, 1);
+    else {
+      if (bulletsSeen++ > maxBullets) {
+        state.bullets.splice(i, 1);
+      }
+    }
+  }
+  state.bullets = state.bullets.splice(
+    Math.max(0, state.bullets.length - maxBullets),
+  );
 }
 
 function drawGameOverScreen(ctx: CanvasRenderingContext2D) {
@@ -114,76 +194,20 @@ function drawPlayer(ctx: CanvasRenderingContext2D) {
   );
   ctx.fill();
 }
-function drawLaser(ctx: CanvasRenderingContext2D) {
-  const angle = Math.atan2(
-    state.cursor.y - state.player.y,
-    state.cursor.x - state.player.x,
-  );
-  const intersections = state.enemies
-    .filter((enemy) => !enemy.dead && enemy.timeToSpawn <= 0)
-    .map((enemy) =>
-      closestIntersectionPoint(
-        { x: state.player.x, y: state.player.y },
-        {
-          x: state.player.x + Math.cos(angle) * rayLength,
-          y: state.player.y + Math.sin(angle) * rayLength,
-        },
-        { x: enemy.x, y: enemy.y },
-        enemy.radius,
-      ),
-    )
-    .filter((x) => x !== null);
-  const intersection = intersections.reduce(
-    (acc, cur) => {
-      if (acc === null) return cur;
-      if (cur === null) return acc;
-      const distAcc = Math.hypot(
-        acc.x - state.player.x,
-        acc.y - state.player.y,
-      );
-      const distCur = Math.hypot(
-        cur.x - state.player.x,
-        cur.y - state.player.y,
-      );
-      return distCur < distAcc ? cur : acc;
-    },
-    null as null | { x: number; y: number },
-  );
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = "red";
-  ctx.beginPath();
-  ctx.moveTo(state.player.x, state.player.y);
-  if (intersection) {
-    ctx.lineTo(intersection.x, intersection.y);
-  } else {
-    ctx.lineTo(
-      state.player.x + Math.cos(angle) * rayLength,
-      state.player.y + Math.sin(angle) * rayLength,
-    );
-  }
-  ctx.globalAlpha = 0.5;
-  ctx.lineCap = "round";
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-}
 
 function drawEnemies(ctx: CanvasRenderingContext2D) {
   state.enemies
-    .filter((enemy) => enemy.dead)
+    .filter((enemy) => enemy.timeToSpawn >= 0)
     .forEach((enemy) => {
       drawEnemy(ctx, enemy);
     });
   state.enemies
-    .filter((enemy) => !enemy.dead && enemy.timeToSpawn >= 0)
-    .forEach((enemy) => {
-      drawEnemy(ctx, enemy);
-    });
-  state.enemies
-    .filter((enemy) => !enemy.dead && enemy.timeToSpawn < 0)
+    .filter((enemy) => enemy.timeToSpawn < 0)
     .forEach((enemy) => {
       drawEnemy(ctx, enemy);
     });
 }
+
 function drawLetterBoxing(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -211,19 +235,7 @@ function drawLetterBoxing(
 function updateEnemies(dt: number) {
   state.enemies.forEach((enemy) => {
     updateEnemy(enemy, dt);
-    if (enemy.dead || enemy.timeToSpawn > 0) return;
-
-    const dist = Math.sqrt(
-      (enemy.x - state.player.x) ** 2 + (enemy.y - state.player.y) ** 2,
-    );
-    if (dist < playerRadius + enemy.radius) {
-      if (enemy.number !== 13) {
-        enemy.dead = true;
-      } else {
-        console.log("lost");
-        state.player.dead = true;
-      }
-    }
+    if (enemy.timeToSpawn > 0) return;
 
     // collide with other enemies
     state.enemies.forEach((otherEnemy) => {
@@ -276,56 +288,18 @@ function handlePlayerMovement(dt: number) {
 }
 
 function handleShoot() {
-  const enemy = getEnemyHovered();
-  if (enemy) {
-    if (enemy.number === 13) {
-      enemy.dead = true;
-    } else {
-      state.player.dead = true;
-    }
-  } else {
-    console.log("missed!");
-  }
-}
-
-function getEnemyHovered() {
   const angle = Math.atan2(
     state.cursor.y - state.player.y,
     state.cursor.x - state.player.x,
   );
-  let closestIntersection = null as null | {
-    x: number;
-    y: number;
-    enemy: ReturnType<typeof createEnemy>;
-  };
-  state.enemies.forEach((enemy) => {
-    if (enemy.dead || enemy.timeToSpawn > 0) return;
-    const intersection = closestIntersectionPoint(
-      { x: state.player.x, y: state.player.y },
-      {
-        x: state.player.x + Math.cos(angle) * rayLength,
-        y: state.player.y + Math.sin(angle) * rayLength,
-      },
-      { x: enemy.x, y: enemy.y },
-      enemy.radius,
-    );
-    if (!intersection) return;
-    if (
-      !closestIntersection ||
-      Math.hypot(
-        state.player.x - intersection.x,
-        state.player.y - intersection.y,
-      ) <
-        Math.hypot(
-          state.player.x - closestIntersection.x,
-          state.player.y - closestIntersection.y,
-        )
-    ) {
-      closestIntersection = { x: intersection.x, y: intersection.y, enemy };
-    }
+  state.bullets.push({
+    x: state.player.x,
+    y: state.player.y,
+    dx: Math.cos(angle),
+    dy: Math.sin(angle),
+    r: 1,
+    dead: false,
   });
-
-  return closestIntersection?.enemy;
 }
 
 function gameAreaInScreenSpace(canvas: HTMLCanvasElement) {

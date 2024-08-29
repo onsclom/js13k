@@ -12,15 +12,12 @@ export function createEnemy() {
 export function createMathEnemy() {
   const enemyRadius = 5;
   const randAngle = Math.random() * Math.PI * 2;
-
   const number = Math.random() > 0.5 ? 13 : randomChoice([11, 12, 14, 15]);
-
   // make a simple math problem that solves to the number
   const add = Math.round(randomBetween(-9, 9));
   const text = add >= 0 ? `${number - add}+${add}` : `${number - add}-${-add}`;
 
   return {
-    dead: false,
     timeToSpawn: 3000,
     x: randomBetween(enemyRadius, gameArea.width - enemyRadius),
     y: randomBetween(enemyRadius, gameArea.height - enemyRadius),
@@ -37,7 +34,6 @@ export function createNumberEnemy() {
   const randAngle = Math.random() * Math.PI * 2;
   const number = randomChoice([13, 14, 15]);
   return {
-    dead: false,
     timeToSpawn: 3000,
     x: randomBetween(enemyRadius, gameArea.width - enemyRadius),
     y: randomBetween(enemyRadius, gameArea.height - enemyRadius),
@@ -51,7 +47,7 @@ export function createNumberEnemy() {
 
 export function updateEnemy(enemy: ReturnType<typeof createEnemy>, dt: number) {
   enemy.timeToSpawn -= dt;
-  if (enemy.timeToSpawn > 0 || enemy.dead) return;
+  if (enemy.timeToSpawn > 0) return;
   const speed = 20;
   enemy.x += (enemy.dx * dt * speed) / 1000;
   enemy.y += (enemy.dy * dt * speed) / 1000;
@@ -116,7 +112,7 @@ export function drawEnemy(
   ctx.textBaseline = "middle";
   ctx.fillText(enemy.text, enemy.x, enemy.y);
 
-  if (enemy.dead) {
+  if (enemy) {
     // apply a black tint over the enemy
     ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
     ctx.beginPath();
