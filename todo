@@ -1,7 +1,7 @@
 main mechanics:
-  - kill 13s by shooting
-  - kill others by touching
-  - if killing something wrong way, you die
+  x kill 13s by shooting
+  x kill others by touching
+  x if killing something wrong way, you die
 
 enemies:
   - multiplication/division
@@ -22,3 +22,11 @@ gameplay:
   - win screen
   - transitions between "scenes"
   - death screen
+
+---
+
+curr:
+- make things look better:
+  - maybe player does little jumps to move?
+  - give player a face?
+  - make enemies

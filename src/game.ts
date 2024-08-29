@@ -1,8 +1,15 @@
-import { drawBullet, updateBullet, Bullet, drawBulletShadow } from "./bullet";
+import {
+  drawBullet,
+  updateBullet,
+  Bullet,
+  drawBulletShadow,
+  createBullet,
+} from "./bullet";
 import { gameArea, colors, shadowOffset } from "./constants";
 import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
 import { gameAreaInScreenSpace } from "./utils";
 import { keysDown, cursor } from "./input";
+import { playShootSound, shootSound } from "./sound";
 
 // CONSTANTS
 const playerRadius = 2;
@@ -19,6 +26,7 @@ let state = {
     y: gameArea.height / 2,
     radius: playerRadius,
     dead: false,
+    angle: 0,
   },
   bullets: [] as Bullet[],
   enemies: [] as ReturnType<typeof createEnemy>[],
@@ -46,8 +54,8 @@ export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   drawEnemyShadows(ctx);
   state.bullets.forEach((bullet) => drawBulletShadow(ctx, bullet));
   drawEnemies(ctx);
-  drawPlayer(ctx);
   state.bullets.forEach((bullet) => drawBullet(ctx, bullet));
+  drawPlayer(ctx);
   if (state.player.dead) drawGameOverScreen(ctx);
 }
 
@@ -122,15 +130,26 @@ function drawEnemyShadows(ctx: CanvasRenderingContext2D) {
 
 function drawPlayerShadow(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = colors[0];
+  ctx.translate(shadowOffset, shadowOffset);
+  drawPlayerShape(ctx);
+  ctx.translate(-shadowOffset, -shadowOffset);
+}
+
+function drawPlayerShape(ctx: CanvasRenderingContext2D) {
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(
-    state.player.x + shadowOffset,
-    state.player.y + shadowOffset,
-    state.player.radius,
-    0,
-    Math.PI * 2,
+  // rotate center
+  ctx.translate(state.player.x, state.player.y);
+  ctx.rotate(state.player.angle);
+  ctx.translate(-state.player.x, -state.player.y);
+  ctx.fillRect(
+    state.player.x - state.player.radius,
+    state.player.y - state.player.radius,
+    state.player.radius * 2,
+    state.player.radius * 2,
   );
   ctx.fill();
+  ctx.restore();
 }
 
 function constrainBulletAmount() {
@@ -167,15 +186,8 @@ function drawGameOverScreen(ctx: CanvasRenderingContext2D) {
 
 function drawPlayer(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = colors[2];
-  ctx.beginPath();
-  ctx.roundRect(
-    state.player.x - state.player.radius,
-    state.player.y - state.player.radius,
-    state.player.radius * 2,
-    state.player.radius * 2,
-    state.player.radius,
-  );
-  ctx.fill();
+  ctx.translate(-state.player.walkHeight, -state.player.walkHeight);
+  drawPlayerShape(ctx);
 }
 
 function drawEnemies(ctx: CanvasRenderingContext2D) {
@@ -247,6 +259,8 @@ function handleSpawningEnemies(dt: number) {
 }
 
 function handlePlayerMovement(dt: number) {
+  const prevx = state.player.x;
+  const prevy = state.player.y;
   if (leftKeys.some((key) => keysDown.has(key))) {
     state.player.x -= (dt / 1000) * speed;
   }
@@ -267,19 +281,27 @@ function handlePlayerMovement(dt: number) {
     playerRadius,
     Math.min(gameArea.height - playerRadius, state.player.y),
   );
+
+  // fun rotating movement animation
+  const strength = 0.2;
+  const rotSpeed = 0.02;
+  const moving = prevx !== state.player.x || prevy !== state.player.y;
+  state.player.angle = moving
+    ? (state.player.angle =
+        (Math.sin(performance.now() * rotSpeed) - 0.5) * strength)
+    : 0;
 }
 
 function handleShoot() {
+  playShootSound();
   const angle = Math.atan2(
     cursor.y - state.player.y,
     cursor.x - state.player.x,
   );
-  state.bullets.push({
-    x: state.player.x,
-    y: state.player.y,
-    dx: Math.cos(angle),
-    dy: Math.sin(angle),
-    r: 1,
-    dead: false,
-  });
+  state.bullets.push(createBullet(state.player.x, state.player.y, angle));
+
+  const recoil = 0.5;
+  // do recoil
+  state.player.x -= Math.cos(angle) * recoil;
+  state.player.y -= Math.sin(angle) * recoil;
 }
