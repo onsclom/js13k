@@ -9,11 +9,17 @@ import { gameArea, colors, shadowOffset } from "./constants";
 import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
 import { gameAreaInScreenSpace } from "./utils";
 import { keysDown, cursor } from "./input";
-import { playShootSound, shootSound } from "./sound";
+import { playHitSound, playShootSound } from "./sound";
+import {
+  DeadEnemy,
+  createDeadEnemy,
+  updateDeadEnemy,
+  drawDeadEnemy,
+} from "./dead-enemy";
 
 // CONSTANTS
 const playerRadius = 2;
-const enemySpawnRate = 1000;
+const enemySpawnRate = 1500;
 const speed = 20;
 const leftKeys = ["ArrowLeft", "a"];
 const rightKeys = ["ArrowRight", "d"];
@@ -30,7 +36,7 @@ let state = {
   },
   bullets: [] as Bullet[],
   enemies: [] as ReturnType<typeof createEnemy>[],
-  deadEnemies: [] as ReturnType<typeof createEnemy>[],
+  deadEnemies: [] as DeadEnemy[],
   spawnTimer: 0,
 };
 
@@ -44,12 +50,17 @@ export function update(dt: number) {
   constrainBulletAmount();
   handleBulletsTouchingEnemies();
   handlePlayerTouchingEnemies();
+  state.deadEnemies.forEach((deadEnemy) => updateDeadEnemy(deadEnemy, dt));
+  state.deadEnemies = state.deadEnemies.filter(
+    (deadEnemy) => deadEnemy.life > 0,
+  );
 }
+
 export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const drawingRect = canvas.getBoundingClientRect();
   const { xScale, yScale } = gameAreaInScreenSpace(canvas);
   drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
-  drawDeadEnemies(ctx);
+  state.deadEnemies.forEach((deadEnemy) => drawDeadEnemy(ctx, deadEnemy));
   drawPlayerShadow(ctx);
   drawEnemyShadows(ctx);
   state.bullets.forEach((bullet) => drawBulletShadow(ctx, bullet));
@@ -68,13 +79,22 @@ function handlePlayerTouchingEnemies() {
     );
     if (dist < playerRadius + enemy.radius) {
       if (enemy.number !== 13) {
-        state.deadEnemies.push(enemy);
+        // state.deadEnemies.push(enemy);
         const dead = state.enemies.splice(i, 1);
-        state.deadEnemies.push(dead[0]);
+        state.deadEnemies.push(
+          createDeadEnemy(
+            dead[0].x,
+            dead[0].y,
+            dead[0].dx,
+            dead[0].radius,
+            dead[0].text,
+          ),
+        );
       } else {
         console.log("lost");
         state.player.dead = true;
       }
+      playHitSound();
     }
   }
 }
@@ -93,20 +113,20 @@ function handleBulletsTouchingEnemies() {
         } else {
           bullet.dead = true;
           const dead = state.enemies.splice(i, 1);
-          state.deadEnemies.push(dead[0]);
+          state.deadEnemies.push(
+            createDeadEnemy(
+              dead[0].x,
+              dead[0].y,
+              dead[0].dx,
+              dead[0].radius,
+              dead[0].text,
+            ),
+          );
         }
+        playHitSound();
+        break;
       }
     }
-  });
-}
-
-function drawDeadEnemies(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = "gray";
-  state.deadEnemies.forEach((enemy) => {
-    ctx.fillStyle = colors[enemy.number];
-    ctx.beginPath();
-    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-    ctx.fill();
   });
 }
 
@@ -186,7 +206,6 @@ function drawGameOverScreen(ctx: CanvasRenderingContext2D) {
 
 function drawPlayer(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = colors[2];
-  ctx.translate(-state.player.walkHeight, -state.player.walkHeight);
   drawPlayerShape(ctx);
 }
 
