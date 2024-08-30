@@ -15,6 +15,6 @@ export function update(dt: number) {
   curScene.update(dt);
 }
 
-export function draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  curScene.draw(ctx, canvas);
+export function draw(ctx: CanvasRenderingContext2D) {
+  curScene.draw(ctx);
 }

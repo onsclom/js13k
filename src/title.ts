@@ -1,16 +1,44 @@
 import { colors, gameArea, fontStack } from "./constants";
+import { cursor } from "./input";
 import { changeScene } from "./game";
-import { cursor, keysDown } from "./input";
 import * as Tutorial from "./tutorial";
 import { shadowOffset } from "./constants";
+import {
+  createTransitionState,
+  drawTransitionOut,
+  isTransitionDone,
+  updateTransition,
+} from "./transition";
+
+let state = {
+  fadingOut: false,
+  transition: createTransitionState(),
+};
+
+const timeToTransition = 1000;
 
 export function update(dt: number) {
-  if (cursor.clicked) {
+  if (cursor.clicked && !state.fadingOut) {
+    state.fadingOut = true;
+  }
+
+  if (state.fadingOut) {
+    updateTransition(state.transition, dt);
+  }
+
+  if (isTransitionDone(state.transition)) {
     changeScene(Tutorial);
   }
 }
 
 export function draw(ctx: CanvasRenderingContext2D) {
+  if (state.fadingOut) {
+    drawTransitionOut(ctx, state.transition);
+  }
+
+  ctx.fillStyle = colors[3];
+  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
+
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `12px ${fontStack}`;

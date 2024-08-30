@@ -3,7 +3,7 @@ import { randomBetween, randomChoice } from "./utils";
 
 export function createEnemy() {
   if (Math.random() < 0.5) {
-    return createNumberEnemy();
+    return randomNumberEnemy();
   } else {
     return createMathEnemy();
   }
@@ -29,8 +29,28 @@ export function createMathEnemy() {
   };
 }
 
-export function createNumberEnemy() {
-  const enemyRadius = 3;
+const enemyRadius = 3;
+
+export function createNumberEnemy(
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  number: number,
+) {
+  return {
+    timeToSpawn: 3000,
+    x,
+    y,
+    radius: enemyRadius,
+    dx,
+    dy,
+    number,
+    text: number.toString(),
+  };
+}
+
+export function randomNumberEnemy() {
   const randAngle = Math.random() * Math.PI * 2;
   const number = randomChoice([13, 14, 15]);
   return {

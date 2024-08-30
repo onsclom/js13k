@@ -6,7 +6,12 @@ import {
   createBullet,
 } from "./bullet";
 import { fontStack, gameArea, colors, shadowOffset } from "./constants";
-import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
+import {
+  createEnemy,
+  createNumberEnemy,
+  drawEnemy,
+  updateEnemy,
+} from "./enemy";
 import { keysDown, cursor } from "./input";
 import { playDingSound, playHitSound, playShootSound } from "./sound";
 import {
@@ -15,6 +20,11 @@ import {
   updateDeadEnemy,
   drawDeadEnemy,
 } from "./dead-enemy";
+import {
+  createTransitionState,
+  drawTransitionIn,
+  updateTransition,
+} from "./transition";
 
 // CONSTANTS
 const playerRadius = 2;
@@ -24,7 +34,6 @@ const rightKeys = ["ArrowRight", "d"];
 const upKeys = ["ArrowUp", "w"];
 const downKeys = ["ArrowDown", "s"];
 
-type Steps = "move" | "shoot" | "both";
 let state = {
   player: {
     x: gameArea.width / 2,
@@ -38,24 +47,19 @@ let state = {
   deadEnemies: [] as DeadEnemy[],
   spawnTimer: 0,
 
-  step: "move" as Steps,
+  step: "move" as "move" | "touch" | "shoot",
+  stepProgress: 0,
+  timeAtStep: 0,
   distanceMoved: 0,
+
+  fadeIn: createTransitionState(),
 };
 
-/*
-after title screen, interactive tutorial:
-- walk with wasd/arrow keys
-  - wait until player has pressed them all
-- spawn some non 13 numbers to touch
-  - wait till player touches them all
-- spawn some 13s to shoot
-  - wait till player touches them all
-- spawn both at the same time
-  - wait till player has touched them all
-- send player to level 1!
-*/
+const transitionDuration = 1000;
 
 export function update(dt: number) {
+  updateTransition(state.fadeIn, dt);
+
   const prevPlayerPos = {
     x: state.player.x,
     y: state.player.y,
@@ -85,15 +89,73 @@ export function update(dt: number) {
 
   if (state.step === "move") {
     const toProceed = 50;
-    const progress = Math.min(state.distanceMoved / toProceed, 1);
-    if (progress >= 1) {
+    state.stepProgress = Math.min(state.distanceMoved / toProceed, 1);
+    if (state.stepProgress >= 1) {
+      state.stepProgress = 0;
+      state.step = "touch";
+      // spawn some non 13s
+      const enemies = [
+        { x: 25, y: 90, num: 11 },
+        { x: 25, y: 60, num: 12 },
+        { x: 75, y: 90, num: 14 },
+        { x: 75, y: 60, num: 15 },
+      ];
+      for (const enemy of enemies) {
+        state.enemies.push(
+          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+        );
+      }
+      playDingSound();
+    }
+  } else if (state.step === "touch") {
+    const enemiesToKill = 4;
+    const enemiesAlive = state.enemies.length;
+    state.stepProgress = 1 - enemiesAlive / enemiesToKill;
+    if (enemiesAlive === 0) {
+      state.stepProgress = 0;
       state.step = "shoot";
+      // spawn some 13s
+      const enemies = [
+        { x: 25, y: 90, num: 13 },
+        { x: 25, y: 60, num: 13 },
+        { x: 75, y: 90, num: 13 },
+        { x: 75, y: 60, num: 13 },
+      ];
+      for (const enemy of enemies) {
+        state.enemies.push(
+          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+        );
+      }
+      playDingSound();
+    }
+  } else if (state.step === "shoot") {
+    const enemiesToKill = 4;
+    const enemiesAlive = state.enemies.length;
+    state.stepProgress = 1 - enemiesAlive / enemiesToKill;
+    if (enemiesAlive === 0) {
+      state.stepProgress = 0;
+      // state.step = "booth";
+      // spawn some 13s
+      const enemies = [
+        { x: 25, y: 90, num: 13 },
+        { x: 25, y: 60, num: 13 },
+        { x: 75, y: 90, num: 13 },
+        { x: 75, y: 60, num: 13 },
+      ];
+      for (const enemy of enemies) {
+        state.enemies.push(
+          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+        );
+      }
       playDingSound();
     }
   }
 }
 
 export function draw(ctx: CanvasRenderingContext2D) {
+  drawTransitionIn(ctx, state.fadeIn);
+  ctx.fillStyle = colors[3];
+  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
   {
     state.deadEnemies.forEach((deadEnemy) => drawDeadEnemy(ctx, deadEnemy));
     drawPlayerShadow(ctx);
@@ -106,31 +168,22 @@ export function draw(ctx: CanvasRenderingContext2D) {
   }
 
   drawHelpText(ctx);
-
-  if (state.step === "move") {
-    // draw progress bar
-    const toProceed = 50;
-    const progress = Math.min(state.distanceMoved / toProceed, 1);
-    ctx.fillStyle = colors[1];
-    ctx.fillRect(0, 0, 100 * progress, 10);
-  }
+  ctx.fillStyle = colors[1];
+  ctx.fillRect(0, 0, 100 * state.stepProgress, 4);
 }
+
+const stepTexts = {
+  move: "WASD or arrow keys to move",
+  touch: "touch non-13 numbers",
+  shoot: "shoot 13s by clicking",
+};
 
 function drawHelpText(ctx: CanvasRenderingContext2D) {
   ctx.font = `6px ${fontStack}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // ctx.translate(shadowOffset, shadowOffset);
-  // ctx.fillStyle = colors[0];
-  // ctx.fillText("to move", gameArea.width / 2, gameArea.height / 4);
-  // ctx.translate(-shadowOffset, -shadowOffset);
-
   ctx.fillStyle = colors[1];
-  ctx.fillText(
-    "WASD or arrow keys to move",
-    gameArea.width / 2,
-    gameArea.height / 4,
-  );
+  ctx.fillText(stepTexts[state.step], gameArea.width / 2, gameArea.height / 8);
 }
 
 function handlePlayerTouchingEnemies() {

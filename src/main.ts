@@ -25,7 +25,7 @@ let lastTime = performance.now();
   const drawingRect = canvas.getBoundingClientRect();
   const { xScale, yScale } = gameAreaInScreenSpace(canvas);
   drawLetterBoxing(ctx, canvas, drawingRect, xScale, yScale);
-  draw(ctx, canvas);
+  draw(ctx);
   requestAnimationFrame(animationFrame);
   resetClicked();
 })();
@@ -50,6 +50,6 @@ function drawLetterBoxing(
   ctx.beginPath();
   ctx.rect(0, 0, gameArea.width, gameArea.height);
   ctx.clip();
-  ctx.fillStyle = colors[3];
-  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
+  // ctx.fillStyle = colors[3];
+  // ctx.fillRect(0, 0, gameArea.width, gameArea.height);
 }
