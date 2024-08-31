@@ -1,6 +1,6 @@
 import { gameArea } from "./constants";
 
-const transitionDuration = 500;
+export const transitionDuration = 500;
 
 export function createTransitionState() {
   return { transitionTime: 0 };

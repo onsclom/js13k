@@ -26,7 +26,12 @@ gameplay:
 ---
 
 curr:
-- make things look better:
-  - maybe player does little jumps to move?
-  - give player a face?
-  - make enemies
+- say "touch all non 13s" THEN spawn them
+
+- add better death and bullet hit animations
+  - bullet hits shouldnt remove trail particles!
+
+- screenshake?
+
+- death on tutorial should take you back or something??
+- make diagonal move slower?

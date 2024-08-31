@@ -13,7 +13,12 @@ import {
   updateEnemy,
 } from "./enemy";
 import { keysDown, cursor } from "./input";
-import { playDingSound, playHitSound, playShootSound } from "./sound";
+import {
+  playDingSound,
+  playHitSound,
+  playLetterSound,
+  playShootSound,
+} from "./sound";
 import {
   DeadEnemy,
   createDeadEnemy,
@@ -49,16 +54,34 @@ let state = {
 
   step: "move" as "move" | "touch" | "shoot",
   stepProgress: 0,
-  timeAtStep: 0,
+  stepVisualProgress: 0,
   distanceMoved: 0,
+  timeAtStep: -500,
+  charactersToShow: 0,
 
   fadeIn: createTransitionState(),
 };
 
-const transitionDuration = 1000;
+const stepTexts = {
+  move: "WASD or arrow keys to move",
+  touch: "touch non-13 numbers",
+  shoot: "shoot 13s by clicking",
+};
 
 export function update(dt: number) {
   updateTransition(state.fadeIn, dt);
+
+  const prevCharactersToShow = state.charactersToShow;
+  state.timeAtStep += dt;
+  const msPerCharacter = 50;
+  const charactersToShow = Math.min(
+    stepTexts[state.step].length,
+    Math.floor(Math.max(state.timeAtStep, 0) / msPerCharacter),
+  );
+  state.charactersToShow = charactersToShow;
+  if (charactersToShow > prevCharactersToShow) {
+    playLetterSound();
+  }
 
   const prevPlayerPos = {
     x: state.player.x,
@@ -106,6 +129,7 @@ export function update(dt: number) {
         );
       }
       playDingSound();
+      state.timeAtStep = -500;
     }
   } else if (state.step === "touch") {
     const enemiesToKill = 4;
@@ -127,6 +151,7 @@ export function update(dt: number) {
         );
       }
       playDingSound();
+      state.timeAtStep = -500;
     }
   } else if (state.step === "shoot") {
     const enemiesToKill = 4;
@@ -148,8 +173,13 @@ export function update(dt: number) {
         );
       }
       playDingSound();
+      state.timeAtStep = -500;
     }
   }
+
+  const diff = state.stepProgress - state.stepVisualProgress;
+  const speed = 0.01;
+  state.stepVisualProgress += diff * speed * dt;
 }
 
 export function draw(ctx: CanvasRenderingContext2D) {
@@ -169,21 +199,20 @@ export function draw(ctx: CanvasRenderingContext2D) {
 
   drawHelpText(ctx);
   ctx.fillStyle = colors[1];
-  ctx.fillRect(0, 0, 100 * state.stepProgress, 4);
+  ctx.fillRect(0, 0, 100 * state.stepVisualProgress, 4);
 }
-
-const stepTexts = {
-  move: "WASD or arrow keys to move",
-  touch: "touch non-13 numbers",
-  shoot: "shoot 13s by clicking",
-};
 
 function drawHelpText(ctx: CanvasRenderingContext2D) {
   ctx.font = `6px ${fontStack}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = colors[1];
-  ctx.fillText(stepTexts[state.step], gameArea.width / 2, gameArea.height / 8);
+
+  ctx.fillText(
+    stepTexts[state.step].slice(0, state.charactersToShow),
+    gameArea.width / 2,
+    gameArea.height / 8,
+  );
 }
 
 function handlePlayerTouchingEnemies() {
@@ -207,7 +236,6 @@ function handlePlayerTouchingEnemies() {
           ),
         );
       } else {
-        console.log("lost");
         state.player.dead = true;
       }
       playHitSound();
@@ -223,7 +251,7 @@ function handleBulletsTouchingEnemies() {
       const dx = enemy.x - bullet.x;
       const dy = enemy.y - bullet.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < enemy.radius) {
+      if (distance < enemy.radius + bullet.r) {
         if (enemy.number !== 13) {
           state.player.dead = true;
         } else {

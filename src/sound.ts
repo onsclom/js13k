@@ -55,3 +55,24 @@ export function playHitSound() {
   oscillator.start(audioContext.currentTime);
   oscillator.stop(audioContext.currentTime + 0.2);
 }
+
+export function playLetterSound() {
+  const oscillator = audioContext.createOscillator();
+  oscillator.type = "sine";
+  const gainNode = audioContext.createGain();
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+  gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+  const time = 0.2;
+  oscillator.frequency.exponentialRampToValueAtTime(
+    0.1,
+    audioContext.currentTime + time,
+  );
+  gainNode.gain.exponentialRampToValueAtTime(
+    0.1,
+    audioContext.currentTime + time,
+  );
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.2);
+}
