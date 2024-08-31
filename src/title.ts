@@ -17,6 +17,8 @@ let state = {
 
 const timeToTransition = 1000;
 
+export function createState() {}
+
 export function update(dt: number) {
   if (cursor.clicked && !state.fadingOut) {
     state.fadingOut = true;

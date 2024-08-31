@@ -40,6 +40,7 @@ const upKeys = ["ArrowUp", "w"];
 const downKeys = ["ArrowDown", "s"];
 
 let state = {
+  // base game state
   player: {
     x: gameArea.width / 2,
     y: 2 * (gameArea.height / 3),
@@ -50,136 +51,189 @@ let state = {
   bullets: [] as Bullet[],
   enemies: [] as ReturnType<typeof createEnemy>[],
   deadEnemies: [] as DeadEnemy[],
-  spawnTimer: 0,
 
-  step: "move" as "move" | "touch" | "shoot",
+  // bar progress
   stepProgress: 0,
   stepVisualProgress: 0,
+
+  // tutorial state
+  step: 0,
   distanceMoved: 0,
+
+  // tutorial text
   timeAtStep: -500,
   charactersToShow: 0,
+  textToShow: "",
 
+  // for enemy spawned tuts
+  enemiesSpawned: false,
+
+  // fade in animation state?
   fadeIn: createTransitionState(),
 };
 
-const stepTexts = {
-  move: "WASD or arrow keys to move",
-  touch: "touch non-13 numbers",
-  shoot: "shoot 13s by clicking",
-};
+const stepLogic = [
+  {
+    start() {
+      prepareHelpText("WASD or arrow keys to move");
+    },
+    update(dt: number) {
+      const toProceed = 50;
+      state.stepProgress = Math.min(state.distanceMoved / toProceed, 1);
+      if (state.stepProgress >= 1) {
+        state.stepProgress = 0;
+        // state.step = "touch";
+        incStep();
+        playDingSound();
+        state.timeAtStep = -500;
+      }
+    },
+  },
+  {
+    start() {
+      prepareHelpText("touch non-13 numbers");
+    },
+    update(dt: number) {
+      const enemiesToKill = 4;
+      state.stepProgress = 0;
+
+      const finishedHelpText =
+        state.charactersToShow === state.textToShow.length;
+      if (!state.enemiesSpawned && finishedHelpText) {
+        state.enemiesSpawned = true;
+        // spawn some non 13s
+        const enemies = [
+          { x: 25, y: 90, num: 11 },
+          { x: 25, y: 60, num: 12 },
+          { x: 75, y: 90, num: 14 },
+          { x: 75, y: 60, num: 15 },
+        ];
+        for (const enemy of enemies) {
+          state.enemies.push(
+            createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+          );
+        }
+      }
+      if (state.enemiesSpawned) {
+        const enemiesAlive = state.enemies.length;
+        state.stepProgress = 1 - enemiesAlive / enemiesToKill;
+        if (enemiesAlive === 0) {
+          playDingSound();
+          state.timeAtStep = -500;
+          incStep();
+        }
+      }
+    },
+  },
+  {
+    start() {
+      prepareHelpText("shoot 13s by clicking");
+      state.enemiesSpawned = false;
+    },
+    update(dt: number) {
+      const finishedHelpText =
+        state.charactersToShow === state.textToShow.length;
+      if (!state.enemiesSpawned && finishedHelpText) {
+        state.enemiesSpawned = true;
+        const enemies = [
+          { x: 25, y: 90, num: 13 },
+          { x: 25, y: 60, num: 13 },
+          { x: 75, y: 90, num: 13 },
+          { x: 75, y: 60, num: 13 },
+        ];
+        for (const enemy of enemies) {
+          state.enemies.push(
+            createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+          );
+        }
+      }
+
+      const enemiesToKill = 4;
+      const enemiesAlive = state.enemies.length;
+      state.stepProgress = 1 - enemiesAlive / enemiesToKill;
+      if (enemiesAlive === 0) {
+        state.stepProgress = 0;
+        // state.step = "booth";
+        // spawn some 13s
+        const enemies = [
+          { x: 25, y: 90, num: 13 },
+          { x: 25, y: 60, num: 13 },
+          { x: 75, y: 90, num: 13 },
+          { x: 75, y: 60, num: 13 },
+        ];
+        for (const enemy of enemies) {
+          state.enemies.push(
+            createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
+          );
+        }
+        playDingSound();
+        state.timeAtStep = -500;
+      }
+    },
+  },
+];
+// init
+stepLogic[state.step].start();
+
+function incStep() {
+  state.step++;
+  stepLogic[state.step].start();
+}
+
+function prepareHelpText(text: string) {
+  state.timeAtStep = -500;
+  state.charactersToShow = 0;
+  state.textToShow = text;
+}
 
 export function update(dt: number) {
   updateTransition(state.fadeIn, dt);
+  updateHelpText(dt);
+  const prevPlayerPos = { x: state.player.x, y: state.player.y };
+  coreGameLogic(dt);
+  // for tutorial 1.. don't love this
+  state.distanceMoved += Math.hypot(
+    state.player.x - prevPlayerPos.x,
+    state.player.y - prevPlayerPos.y,
+  );
+  stepLogic[state.step].update(dt);
+  animateProgress(dt);
+}
 
+function animateProgress(dt: number) {
+  const diff = state.stepProgress - state.stepVisualProgress;
+  const speed = 0.01;
+  state.stepVisualProgress += diff * speed * dt;
+}
+
+function coreGameLogic(dt: number) {
+  // main game stuff?
+  if (state.player.dead) return;
+  handlePlayerMovement(dt);
+  if (cursor.clicked) handleShoot();
+  updateEnemies(dt);
+  state.bullets.forEach((bullet) => updateBullet(bullet, dt));
+  constrainBulletAmount();
+  handleBulletsTouchingEnemies();
+  handlePlayerTouchingEnemies();
+  state.deadEnemies.forEach((deadEnemy) => updateDeadEnemy(deadEnemy, dt));
+  state.deadEnemies = state.deadEnemies.filter(
+    (deadEnemy) => deadEnemy.life > 0,
+  );
+}
+
+function updateHelpText(dt: number) {
   const prevCharactersToShow = state.charactersToShow;
   state.timeAtStep += dt;
   const msPerCharacter = 50;
   const charactersToShow = Math.min(
-    stepTexts[state.step].length,
+    state.textToShow.length,
     Math.floor(Math.max(state.timeAtStep, 0) / msPerCharacter),
   );
   state.charactersToShow = charactersToShow;
   if (charactersToShow > prevCharactersToShow) {
     playLetterSound();
   }
-
-  const prevPlayerPos = {
-    x: state.player.x,
-    y: state.player.y,
-  };
-
-  // main game stuff?
-  {
-    if (state.player.dead) return;
-    handlePlayerMovement(dt);
-    // handleSpawningEnemies(dt);
-    if (cursor.clicked) handleShoot();
-    updateEnemies(dt);
-    state.bullets.forEach((bullet) => updateBullet(bullet, dt));
-    constrainBulletAmount();
-    handleBulletsTouchingEnemies();
-    handlePlayerTouchingEnemies();
-    state.deadEnemies.forEach((deadEnemy) => updateDeadEnemy(deadEnemy, dt));
-    state.deadEnemies = state.deadEnemies.filter(
-      (deadEnemy) => deadEnemy.life > 0,
-    );
-  }
-
-  state.distanceMoved += Math.hypot(
-    state.player.x - prevPlayerPos.x,
-    state.player.y - prevPlayerPos.y,
-  );
-
-  if (state.step === "move") {
-    const toProceed = 50;
-    state.stepProgress = Math.min(state.distanceMoved / toProceed, 1);
-    if (state.stepProgress >= 1) {
-      state.stepProgress = 0;
-      state.step = "touch";
-      // spawn some non 13s
-      const enemies = [
-        { x: 25, y: 90, num: 11 },
-        { x: 25, y: 60, num: 12 },
-        { x: 75, y: 90, num: 14 },
-        { x: 75, y: 60, num: 15 },
-      ];
-      for (const enemy of enemies) {
-        state.enemies.push(
-          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
-        );
-      }
-      playDingSound();
-      state.timeAtStep = -500;
-    }
-  } else if (state.step === "touch") {
-    const enemiesToKill = 4;
-    const enemiesAlive = state.enemies.length;
-    state.stepProgress = 1 - enemiesAlive / enemiesToKill;
-    if (enemiesAlive === 0) {
-      state.stepProgress = 0;
-      state.step = "shoot";
-      // spawn some 13s
-      const enemies = [
-        { x: 25, y: 90, num: 13 },
-        { x: 25, y: 60, num: 13 },
-        { x: 75, y: 90, num: 13 },
-        { x: 75, y: 60, num: 13 },
-      ];
-      for (const enemy of enemies) {
-        state.enemies.push(
-          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
-        );
-      }
-      playDingSound();
-      state.timeAtStep = -500;
-    }
-  } else if (state.step === "shoot") {
-    const enemiesToKill = 4;
-    const enemiesAlive = state.enemies.length;
-    state.stepProgress = 1 - enemiesAlive / enemiesToKill;
-    if (enemiesAlive === 0) {
-      state.stepProgress = 0;
-      // state.step = "booth";
-      // spawn some 13s
-      const enemies = [
-        { x: 25, y: 90, num: 13 },
-        { x: 25, y: 60, num: 13 },
-        { x: 75, y: 90, num: 13 },
-        { x: 75, y: 60, num: 13 },
-      ];
-      for (const enemy of enemies) {
-        state.enemies.push(
-          createNumberEnemy(enemy.x, enemy.y, 0, 0, enemy.num),
-        );
-      }
-      playDingSound();
-      state.timeAtStep = -500;
-    }
-  }
-
-  const diff = state.stepProgress - state.stepVisualProgress;
-  const speed = 0.01;
-  state.stepVisualProgress += diff * speed * dt;
 }
 
 export function draw(ctx: CanvasRenderingContext2D) {
@@ -209,7 +263,7 @@ function drawHelpText(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = colors[1];
 
   ctx.fillText(
-    stepTexts[state.step].slice(0, state.charactersToShow),
+    state.textToShow.slice(0, state.charactersToShow),
     gameArea.width / 2,
     gameArea.height / 8,
   );
