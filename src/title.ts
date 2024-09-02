@@ -10,16 +10,14 @@ import {
   updateTransition,
 } from "./transition";
 
-let state = {
-  fadingOut: false,
-  transition: createTransitionState(),
-};
+export function createState() {
+  return {
+    fadingOut: false,
+    transition: createTransitionState(),
+  };
+}
 
-const timeToTransition = 1000;
-
-export function createState() {}
-
-export function update(dt: number) {
+export function update(state: ReturnType<typeof createState>, dt: number) {
   if (cursor.clicked && !state.fadingOut) {
     state.fadingOut = true;
   }
@@ -33,7 +31,10 @@ export function update(dt: number) {
   }
 }
 
-export function draw(ctx: CanvasRenderingContext2D) {
+export function draw(
+  state: ReturnType<typeof createState>,
+  ctx: CanvasRenderingContext2D,
+) {
   if (state.fadingOut) {
     drawTransitionOut(ctx, state.transition);
   }
@@ -45,6 +46,7 @@ export function draw(ctx: CanvasRenderingContext2D) {
   ctx.textBaseline = "middle";
   ctx.font = `12px ${fontStack}`;
 
+  const scale = (Math.sin(performance.now() * 0.002) + 10) * 0.1;
   ctx.save();
   {
     ctx.save();
@@ -52,6 +54,7 @@ export function draw(ctx: CanvasRenderingContext2D) {
     ctx.translate(gameArea.width / 2, gameArea.height / 2);
     ctx.translate(shadowOffset, shadowOffset);
     ctx.rotate((Math.sin(performance.now() * 0.003) - 0.5) * 0.1);
+    ctx.scale(scale, scale);
     ctx.translate(-gameArea.width / 2, -gameArea.height / 2);
     ctx.fillStyle = colors[0];
     ctx.fillText("Quick Maths", gameArea.width / 2, gameArea.height / 2);
@@ -62,6 +65,7 @@ export function draw(ctx: CanvasRenderingContext2D) {
     ctx.translate(0, -10);
     ctx.translate(gameArea.width / 2, gameArea.height / 2);
     ctx.rotate((Math.sin(performance.now() * 0.003) - 0.5) * 0.1);
+    ctx.scale(scale, scale);
     ctx.translate(-gameArea.width / 2, -gameArea.height / 2);
     ctx.fillStyle = colors[1];
     ctx.fillText("Quick Maths", gameArea.width / 2, gameArea.height / 2);

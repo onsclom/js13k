@@ -26,12 +26,9 @@ gameplay:
 ---
 
 curr:
-- say "touch all non 13s" THEN spawn them
-
-- add better death and bullet hit animations
-  - bullet hits shouldnt remove trail particles!
-
+x say "touch all non 13s" THEN spawn them
+x fix bullet trail
+x handle death on tutorial by resetting stage?
 - screenshake?
-
 - death on tutorial should take you back or something??
 - make diagonal move slower?

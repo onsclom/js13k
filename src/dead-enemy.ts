@@ -16,7 +16,6 @@ const lifetime = 500;
 export function createDeadEnemy(
   x: number,
   y: number,
-  dx: number,
   radius: number,
   text: string,
 ): DeadEnemy {
@@ -25,7 +24,7 @@ export function createDeadEnemy(
     x,
     y,
     radius,
-    dx,
+    dx: Math.random() - 0.5,
     dy: -3,
     life: lifetime,
     text,
