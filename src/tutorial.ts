@@ -1,4 +1,4 @@
-import { createBullets, drawBullets, drawBulletsShadows } from "./bullets";
+import { createBullets } from "./bullets";
 import {
   fontStack,
   gameArea,
@@ -17,7 +17,7 @@ import {
   updateTransition,
 } from "./transition";
 import { changeScene } from "./game";
-import * as Levels from "./levels";
+import * as MainGame from "./main-game";
 import * as Base from "./base-game";
 
 const stepLogic: {
@@ -189,7 +189,7 @@ export function update(state: State, dt: number) {
       updateTransition(state.fadeOut, dt);
     }
     if (isTransitionDone(state.fadeOut)) {
-      changeScene(Levels);
+      changeScene(MainGame);
     }
   }
 }
@@ -201,18 +201,19 @@ export function draw(state: State, ctx: CanvasRenderingContext2D) {
   }
   ctx.fillStyle = colors[3];
   ctx.fillRect(0, 0, gameArea.width, gameArea.height);
-  {
-    state.base.deadEnemies.forEach((deadEnemy) =>
-      drawDeadEnemy(ctx, deadEnemy),
-    );
-    drawPlayerShadow(state, ctx);
-    drawEnemyShadows(state, ctx);
-    drawBulletsShadows(state.base.bullets, ctx);
-    drawEnemies(state, ctx);
-    drawBullets(state.base.bullets, ctx);
-    drawPlayer(state, ctx);
-    if (state.base.player.dead) drawGameOverScreen(state, ctx);
-  }
+  // {
+  //   state.base.deadEnemies.forEach((deadEnemy) =>
+  //     drawDeadEnemy(ctx, deadEnemy),
+  //   );
+  //   drawPlayerShadow(state, ctx);
+  //   drawEnemyShadows(state, ctx);
+  //   drawBulletsShadows(state.base.bullets, ctx);
+  //   drawEnemies(state, ctx);
+  //   drawBullets(state.base.bullets, ctx);
+  //   drawPlayer(state, ctx);
+  //   if (state.base.player.dead) drawGameOverScreen(state, ctx);
+  // }
+  Base.draw(state.base, ctx);
 
   drawHelpText(state, ctx);
   ctx.fillStyle = colors[1];
@@ -249,83 +250,4 @@ function drawHelpText(state: State, ctx: CanvasRenderingContext2D) {
     gameArea.width / 2,
     gameArea.height / 8,
   );
-}
-
-function drawEnemyShadows(state: State, ctx: CanvasRenderingContext2D) {
-  state.base.enemies
-    .filter((enemy) => enemy.timeToSpawn <= 0)
-    .forEach((enemy) => {
-      ctx.fillStyle = colors[0];
-      ctx.beginPath();
-      ctx.arc(
-        enemy.x + shadowOffset,
-        enemy.y + shadowOffset,
-        enemy.radius,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.fillStyle = colors[0];
-    });
-}
-
-function drawPlayerShadow(state: State, ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = colors[0];
-  ctx.translate(shadowOffset, shadowOffset);
-  drawPlayerShape(state, ctx);
-  ctx.translate(-shadowOffset, -shadowOffset);
-}
-
-function drawPlayerShape(state: State, ctx: CanvasRenderingContext2D) {
-  ctx.save();
-  ctx.beginPath();
-  // rotate center
-  ctx.translate(state.base.player.x, state.base.player.y);
-  ctx.rotate(state.base.player.angle);
-  ctx.translate(-state.base.player.x, -state.base.player.y);
-  ctx.fillRect(
-    state.base.player.x - state.base.player.radius,
-    state.base.player.y - state.base.player.radius,
-    state.base.player.radius * 2,
-    state.base.player.radius * 2,
-  );
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawGameOverScreen(state: State, ctx: CanvasRenderingContext2D) {
-  ctx.globalAlpha = 0.7;
-  // TODO: think more about this
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
-  ctx.globalAlpha = 1;
-
-  // YOU DIED
-  ctx.fillStyle = colors[1];
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `12px ${fontStack}`;
-  ctx.fillText(
-    state.base.player.deathReason,
-    gameArea.width / 2,
-    gameArea.height / 2,
-  );
-}
-
-function drawPlayer(state: State, ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = colors[2];
-  drawPlayerShape(state, ctx);
-}
-
-function drawEnemies(state: State, ctx: CanvasRenderingContext2D) {
-  state.base.enemies
-    .filter((enemy) => enemy.timeToSpawn >= 0)
-    .forEach((enemy) => {
-      drawEnemy(ctx, enemy);
-    });
-  state.base.enemies
-    .filter((enemy) => enemy.timeToSpawn < 0)
-    .forEach((enemy) => {
-      drawEnemy(ctx, enemy);
-    });
 }

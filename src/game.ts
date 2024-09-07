@@ -1,4 +1,5 @@
 import * as Title from "./title.ts";
+import * as MainGame from "./main-game.ts";
 
 type Scene<State> = {
   createState: () => State;
@@ -6,7 +7,8 @@ type Scene<State> = {
   draw: (state: State, ctx: CanvasRenderingContext2D) => void;
 };
 
-let curScene: Scene<any> = Title;
+// let curScene: Scene<any> = Title;
+let curScene: Scene<any> = MainGame;
 let curState: any = curScene.createState();
 
 // Change scene function to reset state

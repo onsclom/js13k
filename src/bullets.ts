@@ -89,37 +89,3 @@ export function updateBullets(bullets: Bullets, dt: number) {
     }
   }
 }
-
-function drawBulletShape(ctx: CanvasRenderingContext2D, bullet: Bullet) {
-  ctx.beginPath();
-  ctx.arc(bullet.x, bullet.y, bullet.r, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-export function drawBullets(bullets: Bullets, ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = "#ddf";
-  drawParticles(ctx, bullets.particles);
-  ctx.fillStyle = "#88a";
-  for (const bullet of bullets.projectiles) drawBulletShape(ctx, bullet);
-}
-
-function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
-  for (const particle of particles) {
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-export function drawBulletsShadows(
-  bullets: Bullets,
-  ctx: CanvasRenderingContext2D,
-) {
-  ctx.fillStyle = colors[0];
-  ctx.translate(shadowOffset, shadowOffset);
-  drawParticles(ctx, bullets.particles);
-  for (const bullet of bullets.projectiles) {
-    drawBulletShape(ctx, bullet);
-  }
-  ctx.translate(-shadowOffset, -shadowOffset);
-}

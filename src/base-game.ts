@@ -1,7 +1,18 @@
-import { createBullet, createBullets, updateBullets } from "./bullets";
-import { gameArea, playerRadius } from "./constants";
-import { createDeadEnemy, DeadEnemy, updateDeadEnemy } from "./dead-enemy";
-import { createEnemy, updateEnemy } from "./enemy";
+import { Bullets, createBullet, createBullets, updateBullets } from "./bullets";
+import {
+  colors,
+  fontStack,
+  gameArea,
+  playerRadius,
+  shadowOffset,
+} from "./constants";
+import {
+  createDeadEnemy,
+  DeadEnemy,
+  drawDeadEnemy,
+  updateDeadEnemy,
+} from "./dead-enemy";
+import { createEnemy, drawEnemy, updateEnemy } from "./enemy";
 import { reloadScene } from "./game";
 import { cursor, keysDown } from "./input";
 import { playHitSound, playShootSound } from "./sound";
@@ -22,11 +33,11 @@ export function createState() {
     bullets: createBullets(),
     enemies: [] as ReturnType<typeof createEnemy>[],
     deadEnemies: [] as DeadEnemy[],
+    killed: 0,
   };
 }
 
 export function update(state: State, dt: number) {
-  // main game stuff?
   if (state.player.dead) {
     state.player.timeDead += dt;
     if (state.player.timeDead > 1000) {
@@ -47,6 +58,132 @@ export function update(state: State, dt: number) {
   );
 }
 
+export function draw(state: State, ctx: CanvasRenderingContext2D) {
+  {
+    state.deadEnemies.forEach((deadEnemy) => drawDeadEnemy(ctx, deadEnemy));
+    drawPlayerShadow(state, ctx);
+    drawEnemyShadows(state, ctx);
+    drawBulletsShadows(state.bullets, ctx);
+    drawEnemies(state, ctx);
+    drawBullets(state.bullets, ctx);
+    drawPlayer(state, ctx);
+    if (state.player.dead) drawGameOverScreen(state, ctx);
+  }
+}
+
+function drawBulletShape(ctx: CanvasRenderingContext2D, bullet: Bullet) {
+  ctx.beginPath();
+  ctx.arc(bullet.x, bullet.y, bullet.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
+  for (const particle of particles) {
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+export function drawBullets(bullets: Bullets, ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = "#ddf";
+  drawParticles(ctx, bullets.particles);
+  ctx.fillStyle = "#88a";
+  for (const bullet of bullets.projectiles) drawBulletShape(ctx, bullet);
+}
+
+export function drawBulletsShadows(
+  bullets: Bullets,
+  ctx: CanvasRenderingContext2D,
+) {
+  ctx.fillStyle = colors[0];
+  ctx.translate(shadowOffset, shadowOffset);
+  drawParticles(ctx, bullets.particles);
+  for (const bullet of bullets.projectiles) {
+    drawBulletShape(ctx, bullet);
+  }
+  ctx.translate(-shadowOffset, -shadowOffset);
+}
+
+function drawEnemyShadows(state: State, ctx: CanvasRenderingContext2D) {
+  state.enemies
+    .filter((enemy) => enemy.timeToSpawn <= 0)
+    .forEach((enemy) => {
+      ctx.fillStyle = colors[0];
+      ctx.beginPath();
+      ctx.arc(
+        enemy.x + shadowOffset,
+        enemy.y + shadowOffset,
+        enemy.radius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = colors[0];
+    });
+}
+
+function drawPlayerShadow(state: State, ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = colors[0];
+  ctx.translate(shadowOffset, shadowOffset);
+  drawPlayerShape(state, ctx);
+  ctx.translate(-shadowOffset, -shadowOffset);
+}
+
+function drawPlayerShape(state: State, ctx: CanvasRenderingContext2D) {
+  ctx.save();
+  ctx.beginPath();
+  // rotate center
+  ctx.translate(state.player.x, state.player.y);
+  ctx.rotate(state.player.angle);
+  ctx.translate(-state.player.x, -state.player.y);
+  ctx.fillRect(
+    state.player.x - state.player.radius,
+    state.player.y - state.player.radius,
+    state.player.radius * 2,
+    state.player.radius * 2,
+  );
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawGameOverScreen(state: State, ctx: CanvasRenderingContext2D) {
+  ctx.globalAlpha = 0.7;
+  // TODO: think more about this
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, gameArea.width, gameArea.height);
+  ctx.globalAlpha = 1;
+
+  // YOU DIED
+  ctx.fillStyle = colors[1];
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `12px ${fontStack}`;
+  ctx.fillText(
+    state.player.deathReason,
+    gameArea.width / 2,
+    gameArea.height / 2,
+  );
+}
+
+function drawPlayer(state: State, ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = colors[2];
+  drawPlayerShape(state, ctx);
+}
+
+function drawEnemies(state: State, ctx: CanvasRenderingContext2D) {
+  state.enemies
+    .filter((enemy) => enemy.timeToSpawn >= 0)
+    .forEach((enemy) => {
+      drawEnemy(ctx, enemy);
+    });
+  state.enemies
+    .filter((enemy) => enemy.timeToSpawn < 0)
+    .forEach((enemy) => {
+      drawEnemy(ctx, enemy);
+    });
+}
+
 function handlePlayerTouchingEnemies(state: State) {
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     const enemy = state.enemies[i];
@@ -61,6 +198,7 @@ function handlePlayerTouchingEnemies(state: State) {
         state.deadEnemies.push(
           createDeadEnemy(dead[0].x, dead[0].y, dead[0].radius, dead[0].text),
         );
+        state.killed++;
       } else {
         killPlayer(state, `you shot ${enemy.text}!`);
         state.player.deathReason = `you touched ${enemy.text}!`;
@@ -123,8 +261,6 @@ function handleShoot(state: State) {
   state.player.y -= Math.sin(angle) * recoil;
 }
 
-export function draw(state: State, ctx: CanvasRenderingContext2D) {}
-
 function handleBulletsTouchingEnemies(state: State) {
   state.bullets.projectiles.forEach((bullet) => {
     for (let i = state.enemies.length - 1; i >= 0; i--) {
@@ -143,6 +279,7 @@ function handleBulletsTouchingEnemies(state: State) {
           state.deadEnemies.push(
             createDeadEnemy(dead[0].x, dead[0].y, dead[0].radius, dead[0].text),
           );
+          state.killed++;
         }
         playHitSound();
         break;
